@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Horas</title>
+<style>
+  :root{
+    --bg:#0f172a; --card:#1e293b; --card2:#334155;
+    --text:#f1f5f9; --muted:#94a3b8;
+    --green:#22c55e; --green-d:#16a34a;
+    --amber:#f59e0b; --amber-d:#d97706;
+    --red:#ef4444; --red-d:#dc2626;
+    --blue:#3b82f6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:linear-gradient(160deg,#0f172a,#1e1b4b);
+    color:var(--text); min-height:100vh;
+    display:flex; flex-direction:column; align-items:center;
+    padding:24px 16px;
+  }
+  h1{font-size:20px;font-weight:600;margin-bottom:4px;letter-spacing:.5px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:24px}
+  .status{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:13px;font-weight:600;padding:6px 14px;border-radius:999px;
+    margin-bottom:20px;background:var(--card2);
+  }
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+  .dot.working{background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 1.5s infinite}
+  .dot.break{background:var(--amber);box-shadow:0 0 10px var(--amber);animation:pulse 1.5s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .timer{
+    font-size:64px;font-weight:700;font-variant-numeric:tabular-nums;
+    letter-spacing:2px;margin:8px 0;
+  }
+  .timer-label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1px}
+  .card{
+    background:var(--card);border-radius:18px;padding:28px 24px;
+    width:100%;max-width:420px;text-align:center;
+    box-shadow:0 10px 40px rgba(0,0,0,.4);margin-bottom:18px;
+  }
+  .stats{display:flex;gap:12px;margin:22px 0}
+  .stat{flex:1;background:var(--card2);border-radius:12px;padding:14px 8px}
+  .stat .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat .l{font-size:11px;color:var(--muted);margin-top:3px}
+  .buttons{display:flex;flex-direction:column;gap:12px}
+  button{
+    border:none;border-radius:12px;padding:16px;font-size:16px;font-weight:600;
+    cursor:pointer;color:#fff;transition:transform .08s,filter .15s;
+  }
+  button:active{transform:scale(.97)}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  .btn-in{background:var(--green)} .btn-in:hover:not(:disabled){background:var(--green-d)}
+  .btn-break{background:var(--amber)} .btn-break:hover:not(:disabled){background:var(--amber-d)}
+  .btn-out{background:var(--red)} .btn-out:hover:not(:disabled){background:var(--red-d)}
+  .row{display:flex;gap:12px}.row button{flex:1}
+  .log-card{background:var(--card);border-radius:18px;padding:20px 22px;width:100%;max-width:420px}
+  .log-card h2{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+  .clear{font-size:12px;color:var(--muted);background:none;padding:4px 8px;width:auto;border:1px solid var(--card2)}
+  .log{list-style:none;font-size:13px;max-height:220px;overflow-y:auto}
+  .log li{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--card2);color:var(--muted)}
+  .log li:last-child{border:none}
+  .log .ev{color:var(--text);font-weight:500}
+  .log .empty{color:var(--muted);text-align:center;padding:14px 0}
+  .tag{font-size:10px;padding:2px 7px;border-radius:6px;margin-right:7px;font-weight:700;vertical-align:middle}
+  .t-in{background:rgba(34,197,94,.2);color:var(--green)}
+  .t-break{background:rgba(245,158,11,.2);color:var(--amber)}
+  .t-resume{background:rgba(59,130,246,.2);color:var(--blue)}
+  .t-out{background:rgba(239,68,68,.2);color:var(--red)}
+</style>
+</head>
+<body>
+  <h1>⏱️ Control de Horas</h1>
+  <div class="sub" id="today"></div>
+
+  <div class="card">
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">Sin iniciar</span></div>
+    <div class="timer-label">Tiempo trabajado</div>
+    <div class="timer" id="timer">00:00:00</div>
+
+    <div class="stats">
+      <div class="stat"><div class="v" id="breakTime">00:00:00</div><div class="l">En breaks</div></div>
+      <div class="stat"><div class="v" id="clockInAt">--:--</div><div class="l">Entrada</div></div>
+    </div>
+
+    <div class="buttons">
+      <button class="btn-in" id="btnIn" onclick="clockIn()">Clock In</button>
+      <div class="row">
+        <button class="btn-break" id="btnBreak" onclick="toggleBreak()" disabled>Iniciar Break</button>
+        <button class="btn-out" id="btnOut" onclick="clockOut()" disabled>Clock Out</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="log-card">
+    <h2>Registro de hoy <button class="clear" onclick="resetDay()">Reiniciar</button></h2>
+    <ul class="log" id="log"><li class="empty">Aún no hay actividad</li></ul>
+  </div>
+
+<script>
+const KEY = 'clockState';
+let state = load();
+
+function load(){
+  try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.day === today()) return s; }catch(e){}
+  return fresh();
+}
+function fresh(){ return { day: today(), status:'idle', clockIn:null, breakStart:null, breakAccum:0, events:[] }; }
+function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+function today(){ return new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'}); }
+function now(){ return Date.now(); }
+
+function fmt(ms){
+  if(ms<0)ms=0;
+  const s=Math.floor(ms/1000);
+  const h=String(Math.floor(s/3600)).padStart(2,'0');
+  const m=String(Math.floor(s%3600/60)).padStart(2,'0');
+  const sec=String(s%60).padStart(2,'0');
+  return `${h}:${m}:${sec}`;
+}
+function clock(ts){ return new Date(ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}); }
+
+function workedMs(){
+  if(!state.clockIn) return 0;
+  const end = state.clockOut || now();
+  let br = state.breakAccum;
+  if(state.status==='break' && state.breakStart) br += now() - state.breakStart;
+  return end - state.clockIn - br;
+}
+function breakMs(){
+  let br = state.breakAccum;
+  if(state.status==='break' && state.breakStart) br += now() - state.breakStart;
+  return br;
+}
+
+function addEvent(type,label){ state.events.unshift({type,label,t:now()}); }
+
+function clockIn(){
+  state = fresh();
+  state.status='working'; state.clockIn=now();
+  addEvent('in','Clock In'); save(); render();
+}
+function toggleBreak(){
+  if(state.status==='working'){
+    state.status='break'; state.breakStart=now();
+    addEvent('break','Inicio de break');
+  } else if(state.status==='break'){
+    state.breakAccum += now() - state.breakStart;
+    state.breakStart=null; state.status='working';
+    addEvent('resume','Fin de break');
+  }
+  save(); render();
+}
+function clockOut(){
+  if(state.status==='break' && state.breakStart){
+    state.breakAccum += now() - state.breakStart; state.breakStart=null;
+  }
+  state.status='done'; state.clockOut=now();
+  addEvent('out','Clock Out · '+fmt(workedMs())+' trabajadas');
+  save(); render();
+}
+function resetDay(){
+  if(confirm('¿Reiniciar el registro de hoy?')){ state=fresh(); save(); render(); }
+}
+
+function render(){
+  document.getElementById('today').textContent = state.day;
+  document.getElementById('timer').textContent = fmt(workedMs());
+  document.getElementById('breakTime').textContent = fmt(breakMs());
+  document.getElementById('clockInAt').textContent = state.clockIn ? clock(state.clockIn) : '--:--';
+
+  const dot=document.getElementById('dot'), st=document.getElementById('statusText');
+  const bIn=document.getElementById('btnIn'), bBr=document.getElementById('btnBreak'), bOut=document.getElementById('btnOut');
+  dot.className='dot';
+  if(state.status==='working'){ dot.classList.add('working'); st.textContent='Trabajando'; bIn.disabled=true; bBr.disabled=false; bOut.disabled=false; bBr.textContent='Iniciar Break'; }
+  else if(state.status==='break'){ dot.classList.add('break'); st.textContent='En break'; bIn.disabled=true; bBr.disabled=false; bOut.disabled=false; bBr.textContent='Terminar Break'; }
+  else if(state.status==='done'){ st.textContent='Jornada terminada'; bIn.disabled=false; bBr.disabled=true; bOut.disabled=true; bBr.textContent='Iniciar Break'; }
+  else { st.textContent='Sin iniciar'; bIn.disabled=false; bBr.disabled=true; bOut.disabled=true; }
+
+  const log=document.getElementById('log');
+  if(!state.events.length){ log.innerHTML='<li class="empty">Aún no hay actividad</li>'; return; }
+  const tags={in:'t-in',break:'t-break',resume:'t-resume',out:'t-out'};
+  log.innerHTML = state.events.map(e=>
+    `<li><span><span class="tag ${tags[e.type]}">${e.type.toUpperCase()}</span><span class="ev">${e.label}</span></span><span>${clock(e.t)}</span></li>`
+  ).join('');
+}
+
+setInterval(()=>{ if(state.status==='working'||state.status==='break') render(); }, 1000);
+render();
+</script>
+</body>
+</html>
